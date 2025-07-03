@@ -6,6 +6,7 @@ import svgr from "vite-plugin-svgr";
 import { reactRouter } from "@react-router/dev/vite";
 import { configDefaults } from "vitest/config";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
   const {
@@ -30,6 +31,7 @@ export default defineConfig(({ mode }) => {
       viteTsconfigPaths(),
       svgr(),
       tailwindcss(),
+      VitePWA({ registerType: 'autoUpdate' })
     ],
     server: {
       port: FE_PORT,
