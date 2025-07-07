@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       additional-tags:
-        description: 'Comma-separated extra tags to push (e.g. "staging,ci-${{ github.run_number }}")'
+        description: 'Comma-separated extra tags to push (e.g. "latest,main")'
         required: false
 
 jobs:
