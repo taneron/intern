@@ -12,6 +12,11 @@ name: Publish Docker image
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      additional-tags:
+        description: 'Comma-separated extra tags to push (e.g. "staging,ci-${{ github.run_number }}")'
+        required: false
 
 jobs:
   push_to_registry:
@@ -37,6 +42,27 @@ jobs:
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: tanerone/intern
+
+      - name: Prepare final tag list with additional tags
+        id: prep
+        run: |
+          # Start with metadata-action’s computed tags
+          META="${{ steps.meta.outputs.tags }}"
+          ALL="$META"
+          if [[ -n "${{ github.event.inputs.additional-tags }}" ]]; then
+            # Split commas, prefix image name if needed, and append
+            IFS=',' read -ra EXTRA <<< "${{ github.event.inputs.additional-tags }}"
+            for t in "${EXTRA[@]}"; do
+              # trim whitespace
+              TAG="$(echo "$t" | xargs)"
+              # if user didn’t include “tanerone/intern:” prefix, add it
+              if [[ "$TAG" != tanerone/intern:* ]]; then
+                TAG="tanerone/intern:$TAG"
+              fi
+              ALL="$ALL,$TAG"
+            done
+          fi
+          echo "tags=$ALL" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         id: push
