@@ -31,7 +31,32 @@ export default defineConfig(({ mode }) => {
       viteTsconfigPaths(),
       svgr(),
       tailwindcss(),
-      VitePWA({ registerType: 'autoUpdate' })
+      VitePWA({ registerType: 'autoUpdate',
+              includeAssets: [
+                'apple-touch-icon.png',
+'favicon-32x32.png',
+'favicon-16x16.png',
+'safari-pinned-tab.svg'],
+        manifest: {
+        name: 'Intern',
+        short_name: 'intern',
+        description: 'Intern',
+        theme_color: '#ffffff',
+        icons: [
+          {
+            src: 'android-chrome-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'android-chrome-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      }
+
+       })
     ],
     server: {
       port: FE_PORT,
