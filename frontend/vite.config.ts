@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
         short_name: 'intern',
         description: 'Intern',
         theme_color: '#ffffff',
+        display: 'standalone',
         icons: [
           {
             src: 'android-chrome-192x192.png',
