@@ -7,6 +7,7 @@ from pydantic import (
     SecretStr,
     SerializationInfo,
     field_serializer,
+    field_validator,
     model_validator,
 )
 from pydantic.json import pydantic_encoder
@@ -18,9 +19,7 @@ from openhands.storage.data_models.user_secrets import UserSecrets
 
 
 class Settings(BaseModel):
-    """
-    Persisted settings for OpenHands sessions
-    """
+    """Persisted settings for OpenHands sessions"""
 
     language: str | None = None
     agent: str | None = None
@@ -36,6 +35,7 @@ class Settings(BaseModel):
     enable_default_condenser: bool = True
     enable_sound_notifications: bool = False
     enable_proactive_conversation_starters: bool = True
+    enable_solvability_analysis: bool = True
     user_consents_to_analytics: bool | None = None
     sandbox_base_container_image: str | None = None
     sandbox_runtime_container_image: str | None = None
@@ -43,8 +43,12 @@ class Settings(BaseModel):
     search_api_key: SecretStr | None = None
     sandbox_api_key: SecretStr | None = None
     max_budget_per_task: float | None = None
+    # Maximum number of events in the conversation view before condensation runs
+    condenser_max_size: int | None = None
     email: str | None = None
     email_verified: bool | None = None
+    git_user_name: str | None = None
+    git_user_email: str | None = None
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -101,10 +105,18 @@ class Settings(BaseModel):
         data['secret_store'] = secret_store
         return data
 
+    @field_validator('condenser_max_size')
+    @classmethod
+    def validate_condenser_max_size(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
+        if v < 20:
+            raise ValueError('condenser_max_size must be at least 20')
+        return v
+
     @field_serializer('secrets_store')
     def secrets_store_serializer(self, secrets: UserSecrets, info: SerializationInfo):
         """Custom serializer for secrets store."""
-
         """Force invalidate secret store"""
         return {'provider_tokens': {}}
 
@@ -137,3 +149,33 @@ class Settings(BaseModel):
             max_budget_per_task=app_config.max_budget_per_task,
         )
         return settings
+
+    def merge_with_config_settings(self) -> 'Settings':
+        """Merge config.toml settings with stored settings.
+
+        Config.toml takes priority for MCP settings, but they are merged rather than replaced.
+        This method can be used by both server mode and CLI mode.
+        """
+        # Get config.toml settings
+        config_settings = Settings.from_config()
+        if not config_settings or not config_settings.mcp_config:
+            return self
+
+        # If stored settings don't have MCP config, use config.toml MCP config
+        if not self.mcp_config:
+            self.mcp_config = config_settings.mcp_config
+            return self
+
+        # Both have MCP config - merge them with config.toml taking priority
+        merged_mcp = MCPConfig(
+            sse_servers=list(config_settings.mcp_config.sse_servers)
+            + list(self.mcp_config.sse_servers),
+            stdio_servers=list(config_settings.mcp_config.stdio_servers)
+            + list(self.mcp_config.stdio_servers),
+            shttp_servers=list(config_settings.mcp_config.shttp_servers)
+            + list(self.mcp_config.shttp_servers),
+        )
+
+        # Create new settings with merged MCP config
+        self.mcp_config = merged_mcp
+        return self

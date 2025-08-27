@@ -1,5 +1,4 @@
-"""
-This is the main file for the runtime client.
+"""This is the main file for the runtime client.
 It is responsible for executing actions received from OpenHands backend and producing observations.
 
 NOTE: this will be executed inside the docker sandbox.
@@ -72,7 +71,10 @@ from openhands.runtime.utils.bash import BashSession
 from openhands.runtime.utils.files import insert_lines, read_lines
 from openhands.runtime.utils.memory_monitor import MemoryMonitor
 from openhands.runtime.utils.runtime_init import init_user_and_working_directory
-from openhands.runtime.utils.system_stats import get_system_stats
+from openhands.runtime.utils.system_stats import (
+    get_system_stats,
+    update_last_execution_time,
+)
 from openhands.utils.async_utils import call_sync_from_async, wait_all
 
 if sys.platform == 'win32':
@@ -326,7 +328,12 @@ class ActionExecutor:
 
     async def _init_plugin(self, plugin: Plugin):
         assert self.bash_session is not None
-        await plugin.initialize(self.username)
+        # VSCode plugin needs runtime_id for path-based routing when using Gateway API
+        if isinstance(plugin, VSCodePlugin):
+            runtime_id = os.environ.get('RUNTIME_ID')
+            await plugin.initialize(self.username, runtime_id=runtime_id)
+        else:
+            await plugin.initialize(self.username)
         self.plugins[plugin.name] = plugin
         logger.debug(f'Initializing plugin: {plugin.name}')
 
@@ -338,38 +345,10 @@ class ActionExecutor:
             )
 
     async def _init_bash_commands(self):
+        # You can add any bash commands you want to run on startup here
+        # It is empty because: Git configuration is now handled by the runtime client after connection
         INIT_COMMANDS = []
-        is_local_runtime = os.environ.get('LOCAL_RUNTIME_MODE') == '1'
         is_windows = sys.platform == 'win32'
-
-        # Determine git config commands based on platform and runtime mode
-        if is_local_runtime:
-            if is_windows:
-                # Windows, local - split into separate commands
-                INIT_COMMANDS.append(
-                    'git config --file ./.git_config user.name "openhands"'
-                )
-                INIT_COMMANDS.append(
-                    'git config --file ./.git_config user.email "openhands@all-hands.dev"'
-                )
-                INIT_COMMANDS.append(
-                    '$env:GIT_CONFIG = (Join-Path (Get-Location) ".git_config")'
-                )
-            else:
-                # Linux/macOS, local
-                base_git_config = (
-                    'git config --file ./.git_config user.name "openhands" && '
-                    'git config --file ./.git_config user.email "openhands@all-hands.dev" && '
-                    'export GIT_CONFIG=$(pwd)/.git_config'
-                )
-                INIT_COMMANDS.append(base_git_config)
-        else:
-            # Non-local (implies Linux/macOS)
-            base_git_config = (
-                'git config --global user.name "openhands" && '
-                'git config --global user.email "openhands@all-hands.dev"'
-            )
-            INIT_COMMANDS.append(base_git_config)
 
         # Determine no-pager command
         if is_windows:
@@ -668,7 +647,6 @@ class ActionExecutor:
 
 if __name__ == '__main__':
     logger.warning('Starting Action Execution Server')
-
     parser = argparse.ArgumentParser()
     parser.add_argument('port', type=int, help='Port to listen on')
     parser.add_argument('--working-dir', type=str, help='Working directory')
@@ -844,6 +822,8 @@ if __name__ == '__main__':
                 status_code=500,
                 detail=traceback.format_exc(),
             )
+        finally:
+            update_last_execution_time()
 
     @app.post('/update_mcp_server')
     async def update_mcp_server(request: Request):
@@ -900,7 +880,9 @@ if __name__ == '__main__':
 
     @app.post('/upload_file')
     async def upload_file(
-        file: UploadFile, destination: str = '/', recursive: bool = False
+        file: UploadFile,
+        destination: str = '/',
+        recursive: bool = False,
     ):
         assert client is not None
 

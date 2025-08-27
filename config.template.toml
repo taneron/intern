@@ -18,9 +18,6 @@
 # Cache directory path
 #cache_dir = "/tmp/cache"
 
-# Reasoning effort for o1 models (low, medium, high, or not set)
-#reasoning_effort = "medium"
-
 # Debugging enabled
 #debug = false
 
@@ -118,6 +115,9 @@ api_key = ""
 
 # API version
 #api_version = ""
+
+# Reasoning effort for OpenAI o-series models (low, medium, high, or not set)
+#reasoning_effort = "medium"
 
 # Cost per input token
 #input_cost_per_token = 0.0
@@ -363,10 +363,11 @@ classpath = "my_package.my_module.MyCustomAgent"
 #confirmation_mode = false
 
 # The security analyzer to use (For Headless / CLI only -  In Web this is overridden by Session Init)
-#security_analyzer = ""
+# Available options: 'llm' (default), 'invariant'
+#security_analyzer = "llm"
 
 # Whether to enable security analyzer
-#enable_security_analyzer = false
+#enable_security_analyzer = true
 
 #################################### Condenser #################################
 # Condensers control how conversation history is managed and compressed when

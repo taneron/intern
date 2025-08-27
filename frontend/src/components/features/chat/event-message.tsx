@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { ConfirmationButtons } from "#/components/shared/buttons/confirmation-buttons";
 import { OpenHandsAction } from "#/types/core/actions";
 import {
@@ -10,15 +11,19 @@ import {
   isFinishAction,
   isRejectObservation,
   isMcpObservation,
+  isTaskTrackingObservation,
 } from "#/types/core/guards";
 import { OpenHandsObservation } from "#/types/core/observations";
 import { ImageCarousel } from "../images/image-carousel";
 import { ChatMessage } from "./chat-message";
 import { ErrorMessage } from "./error-message";
 import { MCPObservationContent } from "./mcp-observation-content";
+import { TaskTrackingObservationContent } from "./task-tracking-observation-content";
 import { getObservationResult } from "./event-content-helpers/get-observation-result";
 import { getEventContent } from "./event-content-helpers/get-event-content";
 import { GenericEventMessage } from "./generic-event-message";
+import { MicroagentStatus } from "#/types/microagent-status";
+import { MicroagentStatusIndicator } from "./microagent/microagent-status-indicator";
 import { FileList } from "../files/file-list";
 import { parseMessageFromEvent } from "./event-content-helpers/parse-message-from-event";
 import { LikertScale } from "../feedback/likert-scale";
@@ -35,6 +40,14 @@ interface EventMessageProps {
   hasObservationPair: boolean;
   isAwaitingUserConfirmation: boolean;
   isLastMessage: boolean;
+  microagentStatus?: MicroagentStatus | null;
+  microagentConversationId?: string;
+  microagentPRUrl?: string;
+  actions?: Array<{
+    icon: React.ReactNode;
+    onClick: () => void;
+    tooltip?: string;
+  }>;
   isInLast10Actions: boolean;
 }
 
@@ -43,8 +56,13 @@ export function EventMessage({
   hasObservationPair,
   isAwaitingUserConfirmation,
   isLastMessage,
+  microagentStatus,
+  microagentConversationId,
+  microagentPRUrl,
+  actions,
   isInLast10Actions,
 }: EventMessageProps) {
+  const { t } = useTranslation();
   const shouldShowConfirmationButtons =
     isLastMessage && event.source === "agent" && isAwaitingUserConfirmation;
 
@@ -82,27 +100,66 @@ export function EventMessage({
 
   if (isErrorObservation(event)) {
     return (
-      <>
+      <div>
         <ErrorMessage
           errorId={event.extras.error_id}
           defaultMessage={event.message}
         />
+        {microagentStatus && actions && (
+          <MicroagentStatusIndicator
+            status={microagentStatus}
+            conversationId={microagentConversationId}
+            prUrl={microagentPRUrl}
+          />
+        )}
         {renderLikertScale()}
-      </>
+      </div>
     );
   }
 
   if (hasObservationPair && isOpenHandsAction(event)) {
-    if (hasThoughtProperty(event.args)) {
-      return <ChatMessage type="agent" message={event.args.thought} />;
+    if (hasThoughtProperty(event.args) && event.action !== "think") {
+      return (
+        <div>
+          <ChatMessage
+            type="agent"
+            message={event.args.thought}
+            actions={actions}
+          />
+          {microagentStatus && actions && (
+            <MicroagentStatusIndicator
+              status={microagentStatus}
+              conversationId={microagentConversationId}
+              prUrl={microagentPRUrl}
+            />
+          )}
+        </div>
+      );
     }
-    return null;
+    return microagentStatus && actions ? (
+      <MicroagentStatusIndicator
+        status={microagentStatus}
+        conversationId={microagentConversationId}
+        prUrl={microagentPRUrl}
+      />
+    ) : null;
   }
 
   if (isFinishAction(event)) {
     return (
       <>
-        <ChatMessage type="agent" message={getEventContent(event).details} />
+        <ChatMessage
+          type="agent"
+          message={getEventContent(event).details}
+          actions={actions}
+        />
+        {microagentStatus && actions && (
+          <MicroagentStatusIndicator
+            status={microagentStatus}
+            conversationId={microagentConversationId}
+            prUrl={microagentPRUrl}
+          />
+        )}
         {renderLikertScale()}
       </>
     );
@@ -113,7 +170,7 @@ export function EventMessage({
 
     return (
       <>
-        <ChatMessage type={event.source} message={message}>
+        <ChatMessage type={event.source} message={message} actions={actions}>
           {event.args.image_urls && event.args.image_urls.length > 0 && (
             <ImageCarousel size="small" images={event.args.image_urls} />
           )}
@@ -122,6 +179,13 @@ export function EventMessage({
           )}
           {shouldShowConfirmationButtons && <ConfirmationButtons />}
         </ChatMessage>
+        {microagentStatus && actions && (
+          <MicroagentStatusIndicator
+            status={microagentStatus}
+            conversationId={microagentConversationId}
+            prUrl={microagentPRUrl}
+          />
+        )}
         {isAssistantMessage(event) &&
           event.action === "message" &&
           renderLikertScale()}
@@ -130,7 +194,11 @@ export function EventMessage({
   }
 
   if (isRejectObservation(event)) {
-    return <ChatMessage type="agent" message={event.content} />;
+    return (
+      <div>
+        <ChatMessage type="agent" message={event.content} />
+      </div>
+    );
   }
 
   if (isMcpObservation(event)) {
@@ -146,11 +214,41 @@ export function EventMessage({
     );
   }
 
+  if (isTaskTrackingObservation(event)) {
+    const { command } = event.extras;
+    let title: React.ReactNode;
+    let initiallyExpanded = false;
+
+    // Determine title and expansion state based on command
+    if (command === "plan") {
+      title = t("OBSERVATION_MESSAGE$TASK_TRACKING_PLAN");
+      initiallyExpanded = true;
+    } else {
+      // command === "view"
+      title = t("OBSERVATION_MESSAGE$TASK_TRACKING_VIEW");
+      initiallyExpanded = false;
+    }
+
+    return (
+      <div>
+        <GenericEventMessage
+          title={title}
+          details={<TaskTrackingObservationContent event={event} />}
+          success={getObservationResult(event)}
+          initiallyExpanded={initiallyExpanded}
+        />
+        {shouldShowConfirmationButtons && <ConfirmationButtons />}
+      </div>
+    );
+  }
+
   return (
     <div>
-      {isOpenHandsAction(event) && hasThoughtProperty(event.args) && (
-        <ChatMessage type="agent" message={event.args.thought} />
-      )}
+      {isOpenHandsAction(event) &&
+        hasThoughtProperty(event.args) &&
+        event.action !== "think" && (
+          <ChatMessage type="agent" message={event.args.thought} />
+        )}
 
       <GenericEventMessage
         title={getEventContent(event).title}
