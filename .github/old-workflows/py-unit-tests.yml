@@ -83,24 +83,3 @@ jobs:
           PYTHONPATH: ".;$env:PYTHONPATH"
           TEST_RUNTIME: local
           DEBUG: "1"
-  test-enterprise:
-    name: Enterprise Python Unit Tests
-    runs-on: blacksmith-4vcpu-ubuntu-2204
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install poetry via pipx
-        run: pipx install poetry
-      - name: Set up Python
-        uses: useblacksmith/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "poetry"
-      - name: Install Python dependencies using Poetry
-        working-directory: ./enterprise
-        run: poetry install --with dev,test
-      - name: Run Unit Tests
-        working-directory: ./enterprise
-        run: PYTHONPATH=".:$PYTHONPATH" poetry run pytest --forked -n auto -svv -p no:ddtrace -p no:ddtrace.pytest_bdd -p no:ddtrace.pytest_benchmark ./tests/unit
